@@ -9,8 +9,9 @@ topic = Carrot.topic("nomnom")
 bar_consumer.bind(topic, :key => "foo.bar")
 all_consumer.bind(topic, :key => "foo.*")
 
-topic.publish('foo', :key => "foo.bar")
+topic.publish('bar', :key => "foo.bar")
 topic.publish('baz', :key => "foo.baz")
+topic.publish('boo', :key => "foo.boo")
 
 msg = bar_consumer.pop(:ack => true)
 puts "bar consumer: #{msg}"

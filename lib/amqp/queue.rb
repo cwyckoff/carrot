@@ -1,3 +1,5 @@
+require 'ruby-debug'
+
 module Carrot::AMQP
   class Queue
     attr_reader :name, :server, :carrot
@@ -28,6 +30,30 @@ module Carrot::AMQP
       raise 'unexpected length' if msg.length < header.size
 
       msg
+    end
+
+    def subscribe(opts = {}, &blk)
+      consumer_tag = opts[:consumer_tag] || name 
+      opts.delete(:nowait)
+      hdr = opts.delete(:header)
+
+      server.send_frame(Protocol::Basic::Consume.new({ :queue => name,
+                                                       :consumer_tag => consumer_tag,
+                                                       :no_ack => !opts.delete(:ack),
+                                                       :nowait => false }.merge(opts)) )
+
+      raise "Error subscribing to queue #{name}" unless
+        server.next_method.is_a?(Protocol::Basic::ConsumeOk)
+
+      while true
+        method = server.next_method
+        self.delivery_tag = method.delivery_tag
+        header = server.next_payload
+        msg    = server.next_payload
+        raise 'unexpected length' if msg.length < header.size
+
+        blk.call(hdr ? {:header => header, :payload => msg, :delivery_details => method.arguments} : msg)
+      end 
     end
 
     def ack
@@ -67,7 +93,6 @@ module Carrot::AMQP
     def unbind(exchange, opts = {})
       exchange = exchange.respond_to?(:name) ? exchange.name : exchange
       bindings.delete(exchange)
-
       server.send_frame(
         Protocol::Queue::Unbind.new({
           :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
