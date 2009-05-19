@@ -11,3 +11,4 @@ while msg = q.pop(:ack => true)
   q.ack
 end
 Carrot.stop
+
