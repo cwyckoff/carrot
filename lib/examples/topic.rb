@@ -1,6 +1,7 @@
 require File.dirname(File.expand_path(__FILE__)) + '/../carrot'
 
-#Carrot.logging = true
+#
+Carrot.logging = true
 all_consumer = Carrot.queue('all')
 bar_consumer = Carrot.queue('bar')
 

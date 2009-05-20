@@ -1,5 +1,3 @@
-require 'ruby-debug'
-
 module Carrot::AMQP
   class Queue
     attr_reader :name, :server, :carrot
@@ -37,15 +35,11 @@ module Carrot::AMQP
       opts.delete(:nowait)
       hdr = opts.delete(:header)
 
-      server.send_frame(Protocol::Basic::Consume.new({ :queue => name,
-                                                       :consumer_tag => consumer_tag,
-                                                       :no_ack => !opts.delete(:ack),
-                                                       :nowait => false }.merge(opts)) )
+      server.send_frame(Protocol::Basic::Consume.new({:queue => name, :consumer_tag => consumer_tag, :no_ack => !opts.delete(:ack), :nowait => false }.merge(opts)))
 
-      raise "Error subscribing to queue #{name}" unless
-        server.next_method.is_a?(Protocol::Basic::ConsumeOk)
+      raise "Error subscribing to queue #{name}" unless server.next_method.is_a?(Protocol::Basic::ConsumeOk)
 
-      while true
+      running do
         method = server.next_method
         self.delivery_tag = method.delivery_tag
         header = server.next_payload
@@ -54,6 +48,12 @@ module Carrot::AMQP
 
         blk.call(hdr ? {:header => header, :payload => msg, :delivery_details => method.arguments} : msg)
       end 
+    end
+
+    def unsubscribe(opts = {})
+      consumer_tag = opts[:consumer_tag] || name
+      opts.delete(:nowait)
+      server.send_frame(Protocol::Basic::Cancel.new({ :consumer_tag => consumer_tag }.merge(opts)))
     end
 
     def ack
@@ -88,6 +88,7 @@ module Carrot::AMQP
       server.send_frame(
         Protocol::Queue::Bind.new({ :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts))
       )
+      self
     end
 
     def unbind(exchange, opts = {})
@@ -108,12 +109,17 @@ module Carrot::AMQP
     end
 
   private
+
     def exchange
       @exchange ||= Exchange.new(carrot, :direct, '', :key => name)
     end
 
     def bindings
       @bindings ||= {}
+    end
+
+    def running(&block)
+      loop(&block)
     end
   end
 end
